@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Group Audit</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #5f6b7a;
+    --border: #dde2e8; --accent: #1f6feb; --accent-text: #fff;
+    --su-bg: #fff1d6; --su-text: #8a5a00; --hm-bg: #e8e4ff; --hm-text: #4b3aa8;
+    --err-bg: #fde8e8; --err-text: #9b1c1c; --row-hover: #f1f5fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --panel: #1b2029; --text: #e6e9ef; --muted: #9aa5b4;
+      --border: #2c3340; --accent: #4c8dff; --accent-text: #fff;
+      --su-bg: #3a2e12; --su-text: #ffcf70; --hm-bg: #2b2550; --hm-text: #b9adff;
+      --err-bg: #3b1c1c; --err-text: #ffb4b4; --row-hover: #222936;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+  input[type=text], input[type=password], input[type=search], select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text); font: inherit; }
+  button { padding: 8px 14px; border: 0; border-radius: 6px; background: var(--accent);
+    color: var(--accent-text); font: inherit; font-weight: 600; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  button:disabled { opacity: .6; cursor: default; }
+  .row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-top: 12px; }
+  details { margin-top: 10px; color: var(--muted); }
+  summary { cursor: pointer; }
+  .msg { padding: 10px 12px; border-radius: 6px; margin-top: 12px; display: none; }
+  .msg.err { background: var(--err-bg); color: var(--err-text); display: block; }
+  .msg.info { background: var(--row-hover); color: var(--muted); display: block; }
+  .stats { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted); margin: 4px 0 12px; }
+  .stats b { color: var(--text); }
+  .toolbar { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; align-items: end; }
+  @media (max-width: 720px) { .toolbar { grid-template-columns: 1fr; } }
+  .checks { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
+  .checks label { display: flex; gap: 6px; align-items: center; font-weight: 500; color: var(--text); font-size: 13px; margin: 0; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--text); }
+  tbody tr:hover { background: var(--row-hover); }
+  tr.owner-break td { border-top: 2px solid var(--border); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; margin: 0 4px 2px 0; white-space: nowrap; }
+  .tag.su { background: var(--su-bg); color: var(--su-text); }
+  .tag.hm { background: var(--hm-bg); color: var(--hm-text); }
+  button.tag.hm { border: 0; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; }
+  button.tag.hm:hover { outline: 2px solid var(--hm-text); }
+  .muted { color: var(--muted); }
+  .hidden { display: none; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; width: 100%; max-width: 520px; max-height: 85vh; display: flex; flex-direction: column; }
+  .modal header { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 10px; align-items: start; }
+  .modal header h2 { font-size: 16px; margin: 0; }
+  .modal .body { padding: 14px 16px; overflow-y: auto; }
+  .counts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .count { border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+  .count b { display: block; font-size: 22px; }
+  .ulist { list-style: none; padding: 0; margin: 0; }
+  .ulist li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 4px; border-bottom: 1px solid var(--border); }
+  .icon-btn { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 5px 7px; line-height: 0; }
+  .icon-btn:hover { color: var(--err-text); border-color: var(--err-text); }
+  .close-btn { background: transparent; color: var(--muted); padding: 2px 8px; font-size: 20px; line-height: 1; }
+  .hidden, .overlay.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ArcGIS Group Audit</h1>
+  <p class="sub">Lists every group in your organization that is a Shared Update group or hides its members. Sign in as an org administrator to see all groups.</p>
+
+  <div class="panel" id="loginPanel">
+    <form id="loginForm" autocomplete="on">
+      <div class="grid">
+        <div>
+          <label for="portal">Portal URL</label>
+          <input type="text" id="portal" value="https://www.arcgis.com" placeholder="https://yourorg.maps.arcgis.com">
+        </div>
+        <div>
+          <label for="username">Username</label>
+          <input type="text" id="username" autocomplete="username" required>
+        </div>
+        <div>
+          <label for="password">Password</label>
+          <input type="password" id="password" autocomplete="current-password">
+        </div>
+        <div>
+          <label for="scope">Groups to check</label>
+          <select id="scope">
+            <option value="org">All groups in the organization</option>
+            <option value="user">Only my groups (Esri KB 000027013 method)</option>
+          </select>
+        </div>
+      </div>
+      <details>
+        <summary>Use an existing token instead (for SAML / enterprise logins or MFA)</summary>
+        <div style="margin-top:8px">
+          <label for="token">Token</label>
+          <input type="text" id="token" placeholder="Paste a token; username and password will be ignored">
+        </div>
+      </details>
+      <div class="row">
+        <button type="submit" id="loadBtn">Sign in &amp; load groups</button>
+        <button type="button" class="secondary hidden" id="signOutBtn">Sign out</button>
+      </div>
+      <div class="msg" id="msg"></div>
+    </form>
+  </div>
+
+  <div class="panel hidden" id="resultsPanel">
+    <div class="stats" id="stats"></div>
+    <div class="toolbar">
+      <div>
+        <label for="filter">Filter</label>
+        <input type="search" id="filter" placeholder="Search title, owner, or ID">
+      </div>
+      <div>
+        <label for="ownerSelect">Owner</label>
+        <select id="ownerSelect"><option value="">All owners</option></select>
+      </div>
+      <div>
+        <label for="sortSelect">Sort by</label>
+        <select id="sortSelect">
+          <option value="owner:asc">Owner (A → Z)</option>
+          <option value="owner:desc">Owner (Z → A)</option>
+          <option value="title:asc">Title (A → Z)</option>
+          <option value="modified:desc">Last modified (newest)</option>
+          <option value="created:desc">Created (newest)</option>
+        </select>
+      </div>
+      <div><button type="button" class="secondary" id="csvBtn">Export CSV</button></div>
+    </div>
+    <div class="checks">
+      <label><input type="checkbox" id="showSU" checked> Shared Update</label>
+      <label><input type="checkbox" id="showHM" checked> Hidden members</label>
+    </div>
+    <div class="table-wrap" style="margin-top:12px">
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="title">Group</th>
+            <th class="sortable" data-sort="owner">Owner</th>
+            <th>Flags</th>
+            <th class="sortable" data-sort="access">Access</th>
+            <th class="sortable" data-sort="modified">Modified</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <p class="muted hidden" id="empty">No groups match the current filters.</p>
+  </div>
+</div>
+
+<div class="overlay hidden" id="overlay" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="modal">
+    <header>
+      <div>
+        <h2 id="mTitle">Hidden members</h2>
+        <div class="muted" style="font-size:12px">Members are hidden from everyone except the owner, managers and admins. Promoting a member to manager makes them visible.</div>
+      </div>
+      <button type="button" class="close-btn" id="mClose" aria-label="Close">×</button>
+    </header>
+    <div class="body">
+      <div class="counts">
+        <div class="count"><span class="muted">Total users in group</span><b id="mTotal">–</b></div>
+        <div class="count"><span class="muted">Hidden users</span><b id="mHidden">–</b></div>
+      </div>
+      <div class="msg" id="mMsg"></div>
+      <ul class="ulist" id="mList"></ul>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let state = { token: null, portal: null, orgUrl: null, groups: [], sortKey: 'owner', sortDir: 'asc' };
+
+  function showMsg(text, kind = 'err') {
+    const m = $('msg'); m.textContent = text; m.className = 'msg ' + (text ? kind : '');
+  }
+
+  function normalizePortal(url) {
+    url = (url || '').trim().replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    url = url.replace(/\/(home|sharing(\/rest)?)$/i, '');
+    return url;
+  }
+
+  async function api(path, params = {}, method = 'GET') {
+    const body = new URLSearchParams({ f: 'json', ...params });
+    if (state.token) body.set('token', state.token);
+    const url = `${state.portal}/sharing/rest/${path}`;
+    const res = method === 'POST'
+      ? await fetch(url, { method: 'POST', body })
+      : await fetch(`${url}?${body.toString()}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status} from ${path}`);
+    const json = await res.json();
+    if (json.error) throw new Error(json.error.message + (json.error.details?.length ? ' — ' + json.error.details.join(' ') : ''));
+    return json;
+  }
+
+  async function getToken(username, password) {
+    const params = { username, password, expiration: 120 };
+    const origin = window.location.origin;
+    if (origin && origin !== 'null' && /^https?:/.test(origin)) {
+      params.client = 'referer'; params.referer = origin;
+    } else {
+      params.client = 'requestip';
+    }
+    const json = await api('generateToken', params, 'POST');
+    if (!json.token) throw new Error('No token returned. Check your username and password.');
+    return json.token;
+  }
+
+  async function searchAllGroups(orgId, onProgress) {
+    const out = []; let start = 1;
+    while (start > 0) {
+      const page = await api('community/groups', {
+        q: `orgid:${orgId}`, num: 100, start, sortField: 'title', sortOrder: 'asc'
+      });
+      out.push(...(page.results || []));
+      onProgress(out.length, page.total);
+      start = page.nextStart;
+    }
+    return out;
+  }
+
+  // Esri KB 000027013: GET /sharing/rest/community/users/USERNAME returns the
+  // user's groups, each carrying "hiddenMembers": true|false.
+  async function userGroups(username) {
+    const u = await api(`community/users/${encodeURIComponent(username)}`);
+    return u.groups || [];
+  }
+
+  // Some search results omit hiddenMembers/capabilities; read the full group record for those.
+  async function fillMissing(groups, onProgress) {
+    const todo = groups.filter(g => g.hiddenMembers === undefined || g.capabilities === undefined);
+    let done = 0;
+    const worker = async () => {
+      while (todo.length) {
+        const g = todo.shift();
+        try {
+          const full = await api(`community/groups/${encodeURIComponent(g.id)}`);
+          if (g.hiddenMembers === undefined) g.hiddenMembers = full.hiddenMembers;
+          if (g.capabilities === undefined) g.capabilities = full.capabilities;
+        } catch (_) { /* skip groups we cannot read */ }
+        onProgress(++done);
+      }
+    };
+    const n = todo.length;
+    if (n) await Promise.all(Array.from({ length: 6 }, worker));
+    return n;
+  }
+
+  const isSharedUpdate = g => (g.capabilities || []).includes('updateitemcontrol');
+  const hasHidden = g => g.hiddenMembers === true;
+
+  $('loginForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = $('loadBtn'); btn.disabled = true;
+    showMsg('');
+    try {
+      state.portal = normalizePortal($('portal').value);
+      state.token = null;
+      const pasted = $('token').value.trim();
+      if (pasted) {
+        state.token = pasted;
+      } else {
+        const u = $('username').value.trim(), p = $('password').value;
+        if (!u || !p) throw new Error('Enter a username and password, or paste a token.');
+        showMsg('Signing in…', 'info');
+        state.token = await getToken(u, p);
+      }
+      $('password').value = '';
+
+      showMsg('Reading organization…', 'info');
+      const self = await api('portals/self');
+      const user = self.user;
+      if (!self.id) throw new Error('This account is not part of an organization.');
+      state.orgUrl = (self.urlKey && self.customBaseUrl)
+        ? `https://${self.urlKey}.${self.customBaseUrl}` : state.portal;
+
+      let all;
+      if ($('scope').value === 'user') {
+        const name = (user && user.username) || $('username').value.trim();
+        if (!name) throw new Error('Could not determine your username for the "Only my groups" check.');
+        showMsg('Loading your groups…', 'info');
+        all = await userGroups(name);
+      } else {
+        all = await searchAllGroups(self.id, (n, total) =>
+          showMsg(`Loading groups… ${n} of ${total}`, 'info'));
+      }
+      const missing = all.filter(g => g.hiddenMembers === undefined || g.capabilities === undefined).length;
+      if (missing) await fillMissing(all, d => showMsg(`Checking group details… ${d} of ${missing}`, 'info'));
+      state.groups = all.filter(g => isSharedUpdate(g) || hasHidden(g));
+      state.totalScanned = all.length;
+      state.who = user ? `${user.username}${user.role ? ' (' + user.role.replace('org_', '') + ')' : ''}` : '';
+      state.orgName = self.name || '';
+
+      const note = user && user.role !== 'org_admin'
+        ? 'You are not an org administrator, so groups you cannot see are not included.' : '';
+      showMsg(note, 'info');
+      $('signOutBtn').classList.remove('hidden');
+      buildOwnerList();
+      render();
+      $('resultsPanel').classList.remove('hidden');
+    } catch (err) {
+      let text = err.message || String(err);
+      if (err instanceof TypeError) text = 'Could not reach the portal. Check the Portal URL and your network (some enterprise portals block browser requests from other origins).';
+      showMsg(text, 'err');
+      state.token = null;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $('signOutBtn').addEventListener('click', () => {
+    state = { token: null, portal: null, orgUrl: null, groups: [], sortKey: 'owner', sortDir: 'asc' };
+    $('token').value = ''; $('password').value = '';
+    $('resultsPanel').classList.add('hidden');
+    $('signOutBtn').classList.add('hidden');
+    showMsg('');
+  });
+
+  function buildOwnerList() {
+    const owners = [...new Set(state.groups.map(g => g.owner))].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    const sel = $('ownerSelect');
+    sel.innerHTML = '<option value="">All owners</option>' +
+      owners.map(o => `<option value="${esc(o)}">${esc(o)} (${state.groups.filter(g => g.owner === o).length})</option>`).join('');
+  }
+
+  function visibleGroups() {
+    const q = $('filter').value.trim().toLowerCase();
+    const owner = $('ownerSelect').value;
+    const su = $('showSU').checked, hm = $('showHM').checked;
+    let rows = state.groups.filter(g =>
+      ((su && isSharedUpdate(g)) || (hm && hasHidden(g))) &&
+      (!owner || g.owner === owner) &&
+      (!q || [g.title, g.owner, g.id].some(v => (v || '').toLowerCase().includes(q))));
+    const { sortKey: k, sortDir: d } = state;
+    const mul = d === 'asc' ? 1 : -1;
+    rows.sort((a, b) => {
+      let r;
+      if (k === 'modified' || k === 'created') r = (a[k] || 0) - (b[k] || 0);
+      else r = String(a[k] || '').localeCompare(String(b[k] || ''), undefined, { sensitivity: 'base' });
+      if (r === 0 && k !== 'title') r = String(a.title).localeCompare(String(b.title), undefined, { sensitivity: 'base' });
+      return r * mul;
+    });
+    return rows;
+  }
+
+  function render() {
+    const rows = visibleGroups();
+    const suCount = state.groups.filter(isSharedUpdate).length;
+    const hmCount = state.groups.filter(hasHidden).length;
+    $('stats').innerHTML =
+      (state.orgName ? `<span><b>${esc(state.orgName)}</b></span>` : '') +
+      `<span>Signed in as <b>${esc(state.who)}</b></span>` +
+      `<span>Groups scanned: <b>${state.totalScanned}</b></span>` +
+      `<span>Shared Update: <b>${suCount}</b></span>` +
+      `<span>Hidden members: <b>${hmCount}</b></span>` +
+      `<span>Showing: <b>${rows.length}</b></span>`;
+
+    let prevOwner = null;
+    $('tbody').innerHTML = rows.map(g => {
+      const flags = (isSharedUpdate(g) ? '<span class="tag su">Shared Update</span>' : '') +
+                    (hasHidden(g) ? `<button type="button" class="tag hm" data-gid="${esc(g.id)}" title="View hidden members">Hidden members</button>` : '');
+      const brk = state.sortKey === 'owner' && prevOwner !== null && prevOwner !== g.owner ? ' class="owner-break"' : '';
+      prevOwner = g.owner;
+      return `<tr${brk}>
+        <td><a href="${state.orgUrl}/home/group.html?id=${encodeURIComponent(g.id)}" target="_blank" rel="noopener">${esc(g.title)}</a>
+          <div class="muted" style="font-size:12px">${esc(g.id)}</div></td>
+        <td><a href="${state.orgUrl}/home/user.html?user=${encodeURIComponent(g.owner)}" target="_blank" rel="noopener">${esc(g.owner)}</a></td>
+        <td>${flags}</td>
+        <td>${esc(g.access || '')}</td>
+        <td>${g.modified ? new Date(g.modified).toLocaleDateString() : ''}</td>
+      </tr>`;
+    }).join('');
+    $('empty').classList.toggle('hidden', rows.length > 0);
+
+    document.querySelectorAll('th.sortable').forEach(th => {
+      const base = th.textContent.replace(/ [▲▼]$/, '');
+      th.textContent = base + (th.dataset.sort === state.sortKey ? (state.sortDir === 'asc' ? ' ▲' : ' ▼') : '');
+    });
+    const opt = `${state.sortKey}:${state.sortDir}`;
+    if ([...$('sortSelect').options].some(o => o.value === opt)) $('sortSelect').value = opt;
+  }
+
+  document.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => {
+    const k = th.dataset.sort;
+    if (state.sortKey === k) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+    else { state.sortKey = k; state.sortDir = (k === 'modified' ? 'desc' : 'asc'); }
+    render();
+  }));
+  $('sortSelect').addEventListener('change', e => {
+    const [k, d] = e.target.value.split(':'); state.sortKey = k; state.sortDir = d; render();
+  });
+  ['filter', 'ownerSelect', 'showSU', 'showHM'].forEach(id =>
+    $(id).addEventListener(id === 'filter' ? 'input' : 'change', render));
+
+  // ---- Hidden members pop-up ----
+  const TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+  let modalGroup = null;
+
+  // GET community/groups/{id}/userList — every member with memberType owner | admin | member.
+  // Also cross-checks the older community/groups/{id}/users endpoint (owner, admins[], users[]),
+  // since either one can come back incomplete for some groups.
+  async function groupMembers(groupId) {
+    const byName = new Map();
+    const rank = { owner: 3, admin: 2, member: 1 };
+    const add = (username, memberType, extra = {}) => {
+      if (!username) return;
+      const t = String(memberType || 'member').toLowerCase();
+      const type = t === 'owner' ? 'owner' : (t === 'admin' || t === 'manager') ? 'admin' : 'member';
+      const prev = byName.get(username);
+      if (!prev || rank[type] > rank[prev.memberType]) byName.set(username, { ...(prev || {}), ...extra, username, memberType: type });
+      else if (extra.fullName && !prev.fullName) prev.fullName = extra.fullName;
+    };
+    const diag = { userListTotal: null, userListRows: 0, legacyRows: 0, errors: [] };
+
+    try {
+      let start = 1;
+      while (start > 0) {
+        const page = await api(`community/groups/${encodeURIComponent(groupId)}/userList`,
+          { num: 100, start, sortField: 'username', sortOrder: 'asc' });
+        if (diag.userListTotal === null) diag.userListTotal = page.total;
+        if (page.owner) add(page.owner.username, 'owner', page.owner);
+        (page.users || []).forEach(u => { diag.userListRows++; add(u.username, u.memberType, u); });
+        start = page.nextStart > 0 && (page.users || []).length ? page.nextStart : -1;
+      }
+    } catch (err) { diag.errors.push(`userList: ${err.message}`); }
+
+    try {
+      const legacy = await api(`community/groups/${encodeURIComponent(groupId)}/users`);
+      add(legacy.owner, 'owner');
+      (legacy.admins || []).forEach(n => { diag.legacyRows++; add(n, 'admin'); });
+      (legacy.users || []).forEach(n => { diag.legacyRows++; add(n, 'member'); });
+    } catch (err) { diag.errors.push(`users: ${err.message}`); }
+
+    if (!byName.size && diag.errors.length) throw new Error(diag.errors.join(' | '));
+    return { members: [...byName.values()], diag };
+  }
+
+  function closeModal() { $('overlay').classList.add('hidden'); modalGroup = null; }
+  $('mClose').addEventListener('click', closeModal);
+  $('overlay').addEventListener('click', e => { if (e.target === $('overlay')) closeModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && modalGroup) closeModal(); });
+
+  function modalMsg(text, kind = 'err') { const m = $('mMsg'); m.textContent = text; m.className = 'msg ' + (text ? kind : ''); }
+
+  async function openModal(gid) {
+    const g = state.groups.find(x => x.id === gid);
+    if (!g) return;
+    modalGroup = g;
+    $('mTitle').textContent = `Hidden members — ${g.title}`;
+    $('mTotal').textContent = '…'; $('mHidden').textContent = '…'; $('mList').innerHTML = '';
+    modalMsg('Loading members…', 'info');
+    $('overlay').classList.remove('hidden');
+    $('mClose').focus();
+    try {
+      const { members, diag } = await groupMembers(gid);
+      if (modalGroup !== g) return;
+      modalDiag = diag;
+      drawModal(members);
+    } catch (err) {
+      if (modalGroup === g) modalMsg(`Could not load members: ${err.message}`);
+    }
+  }
+
+  let modalDiag = null;
+  function drawModal(members) {
+    const hidden = members.filter(u => u.memberType === 'member');
+    const visible = members.filter(u => u.memberType !== 'member')
+      .sort((a, b) => (a.memberType === 'owner' ? -1 : b.memberType === 'owner' ? 1 : a.username.localeCompare(b.username)));
+    $('mTotal').textContent = members.length;
+    $('mHidden').textContent = hidden.length;
+
+    const d = modalDiag || {};
+    if (hidden.length) {
+      modalMsg('');
+    } else if (members.length <= visible.length && members.length > 0) {
+      modalMsg(`This group has hidden members turned on, but all ${members.length} user${members.length === 1 ? ' is' : 's are'} the owner or a manager, so no one is currently hidden. Nothing needs promoting.`, 'info');
+    } else {
+      modalMsg('ArcGIS returned no members for this group. Your account may not have permission to view this group\'s members.', 'err');
+    }
+
+    const userName = u => `<span><b>${esc(u.username)}</b>${u.fullName ? ` <span class="muted">${esc(u.fullName)}</span>` : ''}</span>`;
+    const hiddenHtml = hidden.length
+      ? `<li class="muted" style="border:0;padding-top:0;font-size:12px;font-weight:600">HIDDEN MEMBERS</li>` + hidden.map(u => `
+      <li>
+        ${userName(u)}
+        <button type="button" class="icon-btn" data-promote="${esc(u.username)}" title="Make ${esc(u.username)} a manager so they are no longer hidden" aria-label="Make ${esc(u.username)} a visible manager">${TRASH}</button>
+      </li>`).join('') : '';
+    const visibleHtml = visible.length
+      ? `<li class="muted" style="border:0;padding-top:14px;font-size:12px;font-weight:600">VISIBLE (OWNER &amp; MANAGERS)</li>` + visible.map(u => `
+      <li>${userName(u)}<span class="muted" style="font-size:12px">${u.memberType === 'owner' ? 'Owner' : 'Manager'}</span></li>`).join('') : '';
+    const diagHtml = `<li style="border:0;padding-top:14px"><details style="margin:0;font-size:12px"><summary>Details from ArcGIS</summary>
+      userList total reported: ${d.userListTotal ?? 'n/a'} · userList rows: ${d.userListRows ?? 0} · legacy users rows: ${d.legacyRows ?? 0}
+      ${(d.errors || []).length ? '<br>Errors: ' + esc(d.errors.join(' | ')) : ''}</details></li>`;
+    $('mList').innerHTML = hiddenHtml + visibleHtml + diagHtml;
+    $('mList').dataset.members = JSON.stringify(members);
+  }
+
+  $('mList').addEventListener('click', async e => {
+    const btn = e.target.closest('[data-promote]');
+    if (!btn || !modalGroup) return;
+    const username = btn.dataset.promote, g = modalGroup;
+    if (!confirm(`Make "${username}" a manager of "${g.title}"?\n\nManagers are visible to everyone who can see the group, and they can add, remove and manage other members.`)) return;
+    btn.disabled = true;
+    modalMsg(`Promoting ${username}…`, 'info');
+    try {
+      // POST community/groups/{id}/updateUsers with admins=<username> promotes a member to manager.
+      const res = await api(`community/groups/${encodeURIComponent(g.id)}/updateUsers`, { admins: username }, 'POST');
+      if ((res.notUpdated || []).includes(username)) throw new Error('ArcGIS did not update this user.');
+      const members = JSON.parse($('mList').dataset.members || '[]')
+        .map(u => u.username === username ? { ...u, memberType: 'admin' } : u);
+      drawModal(members);
+      modalMsg(`${username} is now a manager and visible in the group.`, 'info');
+    } catch (err) {
+      btn.disabled = false;
+      modalMsg(`Could not promote ${username}: ${err.message}`);
+    }
+  });
+
+  $('tbody').addEventListener('click', e => {
+    const tag = e.target.closest('button.tag.hm');
+    if (tag) openModal(tag.dataset.gid);
+  });
+
+  $('csvBtn').addEventListener('click', () => {
+    const rows = visibleGroups();
+    const head = ['Title', 'Group ID', 'Owner', 'Shared Update', 'Hidden Members', 'Access', 'Created', 'Modified', 'URL'];
+    const lines = [head, ...rows.map(g => [
+      g.title, g.id, g.owner, isSharedUpdate(g) ? 'Yes' : 'No', hasHidden(g) ? 'Yes' : 'No', g.access,
+      g.created ? new Date(g.created).toISOString().slice(0, 10) : '',
+      g.modified ? new Date(g.modified).toISOString().slice(0, 10) : '',
+      `${state.orgUrl}/home/group.html?id=${g.id}`
+    ])].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','));
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'arcgis-group-audit.csv'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+})();
+</script>
+</body>
+</html>
